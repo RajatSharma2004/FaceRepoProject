@@ -1,19 +1,58 @@
 require('dotenv').config();
 const express = require('express');
-const app = express();
-const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
 const cors = require('cors');
+const bodyParser = require('body-parser');
+const path = require('path');
 const fs = require('fs');
 const { compare_face, loadModels } = require('./utils/faceapi');
-require('./configs/dbconnect')();
 const User = require('./models/User');
 
-const port = process.env.PORT || 8000;
+// Import routes
+const studentRoutes = require('./routes/students');
+const attendanceRoutes = require('./routes/attendance');
+const courseRoutes = require('./routes/courses');
+const dashboardRoutes = require('./routes/dashboard');
+
+const app = express();
+
+// Middleware
 app.use(cors());
-app.use(bodyParser.json({ limit: '100mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
-app.use(express.static('public'));
-loadModels();
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/face-attendance', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log('Connected to MongoDB'))
+.catch((err) => console.error('MongoDB connection error:', err));
+
+// Routes
+app.use('/api/students', studentRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/courses', courseRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
+// Serve static files from the React app in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../../Frontend/myapp/build')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../Frontend/myapp/build/index.html'));
+  });
+}
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something went wrong!' });
+});
+
+const PORT = process.env.PORT || 8000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
 app.post('/login', async(req, res) => {
     try{
@@ -89,9 +128,4 @@ app.post('/register', async (req, res) => {
     }).catch((error) => {
         res.status(400).json({ message: error.message });
     });
-});
-
-app.listen(port, async() => {
-    console.clear();
-    console.log(`Example app listening at http://localhost:${port}`);
 });
